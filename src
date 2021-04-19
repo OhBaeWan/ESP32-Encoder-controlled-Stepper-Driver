@@ -1,0 +1,111 @@
+#include <ESP_FlexyStepper.h>
+
+// Rotary Encoder Inputs
+
+int stepAmount = 64;
+
+int CLK[3] = {23, 21, 5};
+int DT[3] = {22, 19, 18};
+int SW[3] = {15, 13, 4};
+
+int Dir[3] = {14, 25, 32};
+int Step[3] = {12, 26, 33};
+
+
+const int SPEED_IN_STEPS_PER_SECOND = 3000;
+const int ACCELERATION_IN_STEPS_PER_SECOND = 1600;
+const int DECELERATION_IN_STEPS_PER_SECOND = 1600;
+
+ESP_FlexyStepper stepper[3];
+
+int counter[3] = {0, 0, 0};
+
+int currentStateCLK[3];
+
+int lastStateCLK[3];
+
+String currentDir[] = {"", "", ""};
+
+
+unsigned long lastButtonPress[] = {0, 0, 0};
+
+void setup() {
+
+  // Set encoder pins as inputs
+  for (int i = 0; i < 3; i++) {
+
+    pinMode(CLK[i], INPUT);
+    pinMode(DT[i], INPUT);
+    pinMode(SW[i], INPUT_PULLUP);
+    pinMode(Dir[i], OUTPUT);
+    pinMode(Step[i], OUTPUT);
+  }
+
+  // Setup Serial Monitor
+  Serial.begin(9600);
+  for (int i = 0; i < 3; i++) {
+
+    lastStateCLK[i] = digitalRead(CLK[i]);
+    stepper[i].connectToPins(Step[i], Dir[i]);
+    stepper[i].setSpeedInStepsPerSecond(SPEED_IN_STEPS_PER_SECOND);
+    stepper[i].setAccelerationInStepsPerSecondPerSecond(ACCELERATION_IN_STEPS_PER_SECOND);
+    stepper[i].setDecelerationInStepsPerSecondPerSecond(DECELERATION_IN_STEPS_PER_SECOND);
+
+    stepper[i].startAsService();
+  }
+}
+
+void loop() {
+
+  // Read the current state of CLK
+  for (int i = 0; i < 3; i++) {
+
+    currentStateCLK[i] = digitalRead(CLK[i]);
+
+    if (currentStateCLK[i] != lastStateCLK[i]  && currentStateCLK[i] == 1) {
+
+      // If the DT state is different than the CLK state then
+      // the encoder is rotating CCW so decrement
+      if (digitalRead(DT[i]) != currentStateCLK[i]) {
+        counter[i] --;
+        currentDir[i] = "CCW";
+        //step CCW
+        stepper[i].setTargetPositionRelativeInSteps(-stepAmount);
+
+      } else {
+        // Encoder is rotating CW so increment
+        counter[i] ++;
+        currentDir[i] = "CW";
+        //step CW
+        stepper[i].setTargetPositionRelativeInSteps(stepAmount); 
+      }
+
+      Serial.print("Axis " );
+      Serial.print(i);
+      Serial.print(" Direction: ");
+      Serial.print(currentDir[i]);
+      Serial.print(" | Counter: ");
+      Serial.println(counter[i]);
+    }
+
+    // Remember last CLK state
+    lastStateCLK[i] = currentStateCLK[i];
+
+    // Read the button state
+    int btnState = digitalRead(SW[i]);
+
+    if (btnState == LOW) {
+      //if 50ms have passed since last LOW pulse, it means that the
+      //button has been pressed, released and pressed again
+      if (millis() - lastButtonPress[i] > 50) {
+        Serial.print("Button ");
+        Serial.print(i);
+        Serial.println(" pressed!");
+      }
+
+      // Remember last button press event
+      lastButtonPress[i] = millis();
+    }
+  }
+  delay(1);
+}
